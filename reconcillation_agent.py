@@ -6,6 +6,7 @@ from elsai_core.model import AzureOpenAIConnector
 from elsai_core.extractors.azure_document_intelligence import AzureDocumentIntelligence
 from elsai_core.config.loggerConfig import setup_logger
 from elsai_core.prompts import PezzoPromptRenderer
+import pandas as pd
  
 load_dotenv()
 logger = setup_logger()
@@ -23,19 +24,39 @@ if 'po_path' not in st.session_state:
     st.session_state.po_path = None
 
 def extract_content_from_pdf(pdf_path):
-    logger.info(f"Extracting from: {os.path.basename(pdf_path)}")
+    logger.info(f"Extracting from PDF: {os.path.basename(pdf_path)}")
     try:
         doc_processor = AzureDocumentIntelligence(pdf_path)
         extracted_text = doc_processor.extract_text()
         extracted_tables = doc_processor.extract_tables()
         return extracted_text, extracted_tables
     except Exception as e:
-        logger.error(f"Extraction error: {str(e)}", exc_info=True)
+        logger.error(f"PDF extraction error: {str(e)}", exc_info=True)
+        raise
+
+def extract_content_from_csv(csv_path):
+    logger.info(f"Extracting from CSV: {os.path.basename(csv_path)}")
+    try:
+        # Read CSV file
+        df = pd.read_csv(csv_path)
+        # Convert dataframe to text for processing
+        text_content = df.to_string(index=False)
+        # Tables are the actual dataframe representation
+        tables = [df]
+        return text_content, tables
+    except Exception as e:
+        logger.error(f"CSV extraction error: {str(e)}", exc_info=True)
         raise
 
 def process_file(file_path, document_type):
     try:
-        content = extract_content_from_pdf(file_path)
+        # Determine file type based on extension
+        if file_path.lower().endswith('.pdf'):
+            content = extract_content_from_pdf(file_path)
+        elif file_path.lower().endswith('.csv'):
+            content = extract_content_from_csv(file_path)
+        else:
+            raise ValueError(f"Unsupported file format: {os.path.splitext(file_path)[1]}")
         
         # Store in session state
         if document_type == "invoice":
@@ -82,8 +103,12 @@ def process_uploaded_file(uploaded_file, document_type):
     progress = st.progress(0)
     status = st.empty()
     status.text("Saving file...")
- 
-    with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as temp_file:
+    
+    # Get file extension
+    file_extension = os.path.splitext(uploaded_file.name)[1].lower()
+    
+    # Create temp file with appropriate extension
+    with tempfile.NamedTemporaryFile(delete=False, suffix=file_extension) as temp_file:
         temp_file.write(uploaded_file.getvalue())
         temp_path = temp_file.name
  
@@ -110,8 +135,8 @@ def process_uploaded_file(uploaded_file, document_type):
         return None, temp_path
  
 def main():
-    st.title("📄 PDF Document Parser")
-    st.markdown("Upload Invoices or Purchase Orders and get structured results.")
+    st.title("📄 Document Parser")
+    st.markdown("Upload Invoices or Purchase Orders (PDF or CSV) and get structured results.")
  
     vision_endpoint = st.secrets.get("VISION_ENDPOINT")
     vision_key = st.secrets.get("VISION_KEY")
@@ -123,13 +148,13 @@ def main():
  
     with col1:
         st.subheader("Invoice")
-        invoice_file = st.file_uploader("Upload Invoice PDF", type=["pdf"], key="invoice")
+        invoice_file = st.file_uploader("Upload Invoice (PDF or CSV)", type=["pdf", "csv"], key="invoice")
         if invoice_file and st.button("Extract Invoice"):
             _, temp_path = process_uploaded_file(invoice_file, "invoice")
  
     with col2:
         st.subheader("Purchase Order")
-        po_file = st.file_uploader("Upload PO PDF", type=["pdf"], key="po")
+        po_file = st.file_uploader("Upload PO (PDF or CSV)", type=["pdf", "csv"], key="po")
         if po_file and st.button("Extract Purchase Order"):
             _, temp_path = process_uploaded_file(po_file, "purchase_order")
  
