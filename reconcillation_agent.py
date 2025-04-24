@@ -10,7 +10,7 @@ from elsai_core.prompts import PezzoPromptRenderer
 load_dotenv()
 logger = setup_logger()
  
-st.set_page_config(page_title="PDF Document Parser", page_icon="📄", layout="wide")
+st.set_page_config(page_title="Invoice and PO Comparison", page_icon="📄", layout="wide")
  
 # Initialize session state variables if they don't exist
 if 'invoice_content' not in st.session_state:
